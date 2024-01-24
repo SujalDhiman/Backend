@@ -1,6 +1,6 @@
 import { User } from "../models/user.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
-
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshToken=async function (userId){
 
@@ -155,4 +155,51 @@ export const logoutUser=async function (req,res){
         message:"Successfully Logged Out",
         data:user
     })
+}
+
+export const refreshAccessToken=async function (req,res){
+    try {
+        //grabbing refreshToken
+
+        const incomingRefreshToken=req.cookies.refreshToken
+
+
+        if(!incomingRefreshToken)
+            res.status(400).json({
+            success:false,
+            message:"Unauthorized request"})
+
+        const decodedToken=await jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
+
+        // finding the user
+        const user=await User.findById(decodedToken.id)
+
+        if(!user)
+            res.status(400).json({
+            success:false,
+            message:"Invalid Refresh Token"})
+        
+        if(incomingRefreshToken !== user.refreshToken)
+                res.status(400).json({
+                success:false,
+                message:"Refresh Token Expired"})
+
+        const {accessToken,refreshToken}=await generateAccessAndRefreshToken(user._id)
+
+        const options={
+            expiresIn:Date.now()+30*60*1000,
+            httpOnly:true
+        }
+
+        res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json({
+                success:true,
+                message:"Access token generated",
+                refreshToken,
+                accessToken
+        })
+        
+
+    } catch (error) {
+        console.log("error in refresh access token ",error.message)
+    }
 }
