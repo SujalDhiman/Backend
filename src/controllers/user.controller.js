@@ -18,7 +18,6 @@ try {
 } catch (error) {
     console.log("something went wrong while generating refresh and access token")
 }
-
 }
 
 export const registerUser=async function(req,res){
@@ -103,15 +102,15 @@ export const loginUser=async function (req,res){
         const user=await User.findOne({$or:[{username},{email}]})
     
         if(!user)
-        res.status(400).json({
+        return res.status(400).json({
         success:false,
         message:"User does not exist"})
     
         // if found the user then validate the password
-        const isValid=user.isPasswordCorrect(user.password)
+        const isValid=await user.isPasswordCorrect(password)
 
         if(!isValid)
-            res.status(400).json({
+            return res.status(400).json({
             success:false,
             message:"Incorrect Password"})
 
@@ -126,7 +125,7 @@ export const loginUser=async function (req,res){
         }
 
 
-        res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json({
+        return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json({
             success:true,
             message:"Successful Login",
             data:loggedInUser,accessToken,refreshToken
@@ -202,4 +201,40 @@ export const refreshAccessToken=async function (req,res){
     } catch (error) {
         console.log("error in refresh access token ",error.message)
     }
+}
+
+export const changeCurrentPassword=async function (req,res){
+
+   try {
+
+        const {oldPassword,newPassword}=req.body
+ 
+        //find user
+        const loggedInUser=await User.findById(req.user)
+
+        const isValidOldPassword=await loggedInUser.isPasswordCorrect(oldPassword)
+
+        if(!isValidOldPassword)
+            return res.status(400).json({
+            success:false,
+            message:"Incorrect old password "})
+        
+        loggedInUser.password=newPassword
+
+        const response=await loggedInUser.save({validateBeforeSave:false})
+        
+        response.password=undefined
+        response.refreshToken=undefined
+
+        console.log("response after changing password ",response)
+
+        res.status(200).json({
+            success:true,
+            message:"password changed successfully",
+            data:response
+        })
+    
+   } catch (error) {
+        console.log("something went wrong in change current password ",error.message)
+   }
 }

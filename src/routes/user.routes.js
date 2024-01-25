@@ -1,5 +1,5 @@
 import express from "express"
-import { registerUser , loginUser , logoutUser , refreshAccessToken} from "../controllers/user.controller.js"
+import { registerUser , loginUser , logoutUser , refreshAccessToken , changeCurrentPassword} from "../controllers/user.controller.js"
 import {upload} from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 import cookieParser from "cookie-parser"
@@ -21,6 +21,7 @@ router.route("/login").post(loginUser)
 
 router.route("/logout").get(verifyJWT,logoutUser)
 
-
 router.route("/regenerateToken").get(refreshAccessToken)
+
+router.route("/changePassword").post(verifyJWT,changeCurrentPassword)
 export default router
