@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {uploadOnCloudinary , deleteFileFromCloudinary} from "../utils/cloudinary.js"
 import jwt from "jsonwebtoken"
+import fs from "fs"
 
 const generateAccessAndRefreshToken=async function (userId){
 
@@ -37,7 +38,7 @@ export const registerUser=async function(req,res){
         const existedUser=await User.findOne({$or:[{username},{email}]})
 
         if(existedUser)
-        res.status(400).json({
+        return res.status(400).json({
         success:false,
         message:"User already exists"})
 
@@ -48,48 +49,43 @@ export const registerUser=async function(req,res){
         const coverImageLocalPath=req.files?.coverImage?.[0]?.path;
 
         if(!avatarLocalPath)
-        res.status(400).json({
+        return res.status(400).json({
         success:false,
         message:"Cover Image is Required"})
 
         //upload them to cloudinary
         const avatar=await uploadOnCloudinary(avatarLocalPath)
 
-
+        console.log("response from cloudinary ",avatar)
         const coverImage=await uploadOnCloudinary(coverImageLocalPath)
 
         if(!avatar)
-        res.status(400).json({
+        return res.status(400).json({
         success:false,
         message:"avatar error"})
 
 
         //create entry for user
-        const user=await User.create({fullName,avatar:avatar.secure_url,username,password,email,coverImage:coverImage?.url || ""})
+        const user=await User.create({fullName,avatar:{public_id:avatar.public_id,
+        url:avatar.secure_url},username,password,email,coverImage:{public_id:coverImage?.public_id || "" , url : coverImage?.secure_url || ""}})
         
         const createdUser=await User.findById(user._id).select("-password -refreshToken")
 
         if(!createdUser)
-        res.status(500).json({
+        return res.status(500).json({
         success:false,
         message:"error in creating user"})
 
-        res.status(200).json({
+        return res.status(200).json({
             success:true,
             message:"User successfully registered",
             createdUser
         })
             
     } catch (error) {
-        console.log(error.message)
-        res.status(400).json({
-            success:false,
-            message:"An error occured",
-            error:error.message
-        })
+        console.log("error in register user ",error.message)
     }
 }
-
 
 export const loginUser=async function (req,res){
 
@@ -174,12 +170,12 @@ export const refreshAccessToken=async function (req,res){
         const user=await User.findById(decodedToken.id)
 
         if(!user)
-            res.status(400).json({
+            return res.status(400).json({
             success:false,
             message:"Invalid Refresh Token"})
         
         if(incomingRefreshToken !== user.refreshToken)
-                res.status(400).json({
+                return res.status(400).json({
                 success:false,
                 message:"Refresh Token Expired"})
 
@@ -190,7 +186,7 @@ export const refreshAccessToken=async function (req,res){
             httpOnly:true
         }
 
-        res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json({
+        return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json({
                 success:true,
                 message:"Access token generated",
                 refreshToken,
@@ -237,4 +233,50 @@ export const changeCurrentPassword=async function (req,res){
    } catch (error) {
         console.log("something went wrong in change current password ",error.message)
    }
+}
+
+export const getCurrentUser=async function(req,res){
+
+
+    const user=await User.findById(req.user).select("-password -refreshToken")
+
+    res.status(200).json({
+        success:true,
+        message:"get details successful",
+        data:user
+    })
+
+}
+
+export const updateUserAvatar=async function(req,res){
+
+    try {
+        const avatarFile=req.file
+        
+        if(avatarFile === undefined)
+        return res.status(400).json({
+            success:true,
+            message:"avatar image is required"})
+    
+        const user=await User.findById(req.user)
+        
+    
+        const responseAfterDeleting=deleteFileFromCloudinary(user.avatar.public_id)
+    
+        const newFileDetails=await uploadOnCloudinary(avatarFile.path)
+    
+        user.avatar.public_id=newFileDetails.public_id
+        user.avatar.url=newFileDetails.secure_url
+    
+        await user.save({validateBeforeSave:false})
+        
+
+        return res.status(200).json({
+            success:true,
+            message:"Avatar updated successfully"
+        })
+    } catch (error) {
+        console.log("error in updating user avatar ",error.message)
+    }
+
 }
